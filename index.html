@@ -250,7 +250,7 @@ dialog button.primary{background:var(--cyan);color:var(--bg)}
   <label>Instagram User-ID (Business/Creator-Konto)</label><input id="cIgId" placeholder="1784…">
   <label>Instagram Access Token (Graph API)</label><input id="cIgTok" type="password" placeholder="EAAG…">
   <p>Wird nur lokal in diesem Browser gespeichert. Leer lassen = Demo-Daten.</p>
-  <label>Eigener CORS-Proxy (optional)</label><input id="cProxy" placeholder="leer = direkt, sonst automatisch öffentlicher Proxy">
+  <label>Kalender-Proxy (nötig für iCloud/Google)</label><input id="cProxy" placeholder="https://jarvis-kalender.DEINNAME.workers.dev/?url=">
   <div class="btns"><button id="cCancel">ABBRECHEN</button><button class="primary" id="cSave">SPEICHERN</button></div>
 </dialog>
 
@@ -365,12 +365,11 @@ function demoEvents(){
   return [{title:"Content-Planung Reels",start:d(9,30),loc:"Home Office"},{title:"Videoschnitt Woche 48",start:d(13,0)},
           {title:"Post veröffentlichen",start:d(18,0),loc:"Instagram"},{title:"Zahnarzt",start:d(10,15,1),loc:"Praxis"},{title:"Analytics-Review",start:d(16,0,2)}];
 }
-/* Öffentliche Proxys als Rückfall, falls der Kalenderdienst (z. B. iCloud) den direkten Abruf per CORS blockiert.
-   Eigener Proxy in ⚙ SETUP hat Vorrang. */
-const PUBLIC_PROXIES=["https://api.allorigins.win/raw?url=","https://corsproxy.io/?url="];
+/* iCloud und Google erlauben keinen direkten Abruf aus dem Browser (CORS).
+   Dafür den eigenen Cloudflare-Worker aus kalender-proxy.js in ⚙ SETUP eintragen. */
 async function fetchICS(url){
   url=url.trim().replace(/^webcals?:\/\//i,"https://");
-  const tries = CFG.corsProxy ? [[CFG.corsProxy,"PROXY"]] : [["","DIREKT"],...PUBLIC_PROXIES.map(p=>[p,"ÜBER PROXY"])];
+  const tries = CFG.corsProxy ? [[CFG.corsProxy,"PROXY"]] : [["","DIREKT"]];
   let lastErr;
   for(const [px,how] of tries){
     try{ const r=await fetch(px? px+encodeURIComponent(url) : url,{cache:"no-store"});
