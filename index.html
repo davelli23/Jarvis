@@ -245,12 +245,12 @@ dialog button.primary{background:var(--cyan);color:var(--bg)}
   <h3>EINSTELLUNGEN</h3>
   <label>Stadt fürs Wetter</label><input id="cCity" placeholder="z. B. Berlin">
   <label>Anrede</label><input id="cName" placeholder="z. B. Sir, Dado">
-  <label>Kalender (öffentliche/geheime iCal-Adresse, .ics)</label><input id="cIcs" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics">
-  <p>Google Kalender: Einstellungen › Kalender › „Privatadresse im iCal-Format“. Leer lassen = Demo-Termine.</p>
+  <label>Kalender (öffentliche/geheime iCal-Adresse, .ics)</label><input id="cIcs" placeholder="webcal://p…-caldav.icloud.com/published/2/…">
+  <p>iPhone: Kalender-App › Kalender › ⓘ › „Öffentlicher Kalender“ an › Link teilen. Google: Einstellungen › „Privatadresse im iCal-Format“. Leer lassen = Demo-Termine.</p>
   <label>Instagram User-ID (Business/Creator-Konto)</label><input id="cIgId" placeholder="1784…">
   <label>Instagram Access Token (Graph API)</label><input id="cIgTok" type="password" placeholder="EAAG…">
   <p>Wird nur lokal in diesem Browser gespeichert. Leer lassen = Demo-Daten.</p>
-  <label>CORS-Proxy (optional, für den Kalender)</label><input id="cProxy" placeholder="z. B. https://corsproxy.io/?url=">
+  <label>Eigener CORS-Proxy (optional)</label><input id="cProxy" placeholder="leer = direkt, sonst automatisch öffentlicher Proxy">
   <div class="btns"><button id="cCancel">ABBRECHEN</button><button class="primary" id="cSave">SPEICHERN</button></div>
 </dialog>
 
@@ -319,33 +319,77 @@ async function loadWeather(){
 /* ---------------- Termine (iCal / .ics) ---------------- */
 function parseICS(txt){
   const lines = txt.replace(/\r?\n[ \t]/g,"").split(/\r?\n/); const out=[]; let ev=null;
-  const toDate = (v,allDay)=>{ const m=v.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?/); if(!m) return null;
+  const toDate = v=>{ const m=v.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?/); if(!m) return null;
     return m[7]? new Date(Date.UTC(+m[1],m[2]-1,+m[3],+m[4],+m[5])) : new Date(+m[1],m[2]-1,+m[3],+(m[4]||0),+(m[5]||0)); };
   for(const l of lines){
-    if(l==="BEGIN:VEVENT") ev={};
+    if(l==="BEGIN:VEVENT") ev={ex:[]};
     else if(l==="END:VEVENT"){ if(ev?.start) out.push(ev); ev=null; }
-    else if(ev){ const i=l.indexOf(":"); const k=l.slice(0,i), v=l.slice(i+1).replace(/\\,/g,",").replace(/\\n/g," ");
-      if(k.startsWith("DTSTART")){ ev.allDay=k.includes("VALUE=DATE")&&!v.includes("T"); ev.start=toDate(v); }
-      else if(k.startsWith("DTEND")) ev.end=toDate(v);
-      else if(k==="SUMMARY") ev.title=v; else if(k==="LOCATION") ev.loc=v; }
+    else if(ev){ const i=l.indexOf(":"); const k=l.slice(0,i), v=l.slice(i+1).replace(/\\,/g,",").replace(/\;/g,";").replace(/\\n/gi," ");
+      const key=k.split(";")[0];
+      if(key==="DTSTART"){ ev.allDay=/VALUE=DATE(?!-)/.test(k)||!v.includes("T"); ev.start=toDate(v); }
+      else if(key==="DTEND") ev.end=toDate(v);
+      else if(key==="SUMMARY") ev.title=v; else if(key==="LOCATION") ev.loc=v;
+      else if(key==="RRULE") ev.rrule=Object.fromEntries(v.split(";").map(x=>x.split("=")));
+      else if(key==="EXDATE") v.split(",").forEach(x=>{const d=toDate(x); d&&ev.ex.push(d.getTime());});
+      else if(key==="RECURRENCE-ID") ev.recId=toDate(v);
+      else if(key==="UID") ev.uid=v;
+      else if(key==="STATUS") ev.status=v; }
   }
-  return out; // Hinweis: wiederkehrende Termine (RRULE) werden in V1 nicht aufgelöst
+  return out.filter(e=>e.status!=="CANCELLED");
+}
+/* Wiederkehrende Termine im Zeitfenster [from,to) auflösen (DAILY/WEEKLY/MONTHLY/YEARLY, INTERVAL, COUNT, UNTIL, BYDAY bei WEEKLY) */
+function expandEvents(evs, from, to){
+  const res=[], moved=new Set(evs.filter(e=>e.recId).map(e=>e.uid+"|"+e.recId.getTime()));
+  const DAYS={SU:0,MO:1,TU:2,WE:3,TH:4,FR:5,SA:6};
+  for(const e of evs){
+    if(!e.rrule||e.recId){ if(e.start>=from&&e.start<to) res.push(e); continue; }
+    const r=e.rrule, iv=+(r.INTERVAL||1), count=r.COUNT?+r.COUNT:Infinity;
+    const until=r.UNTIL?(()=>{const m=r.UNTIL.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})Z?)?/); return m?new Date(Date.UTC(+m[1],m[2]-1,+m[3],+(m[4]||23),+(m[5]||59),59)):null;})():null;
+    const byday=r.FREQ==="WEEKLY"&&r.BYDAY? r.BYDAY.split(",").map(d=>DAYS[d.slice(-2)]).sort() : null;
+    let n=0, cur=new Date(e.start), guard=0;
+    const emit=d=>{ n++; if(d>=from&&d<to&&!e.ex.includes(d.getTime())&&!moved.has(e.uid+"|"+d.getTime())) res.push({...e,start:new Date(d)}); };
+    while(n<count && cur<to && (!until||cur<=until) && guard++<5000){
+      if(byday){ const wk=new Date(cur); wk.setDate(wk.getDate()-wk.getDay());
+        for(const dd of byday){ const d=new Date(wk); d.setDate(wk.getDate()+dd); d.setHours(e.start.getHours(),e.start.getMinutes(),0,0);
+          if(d<e.start||n>=count||(until&&d>until)||d>=to) continue; emit(d); }
+        cur.setDate(cur.getDate()+7*iv); }
+      else { emit(new Date(cur));
+        if(r.FREQ==="DAILY") cur.setDate(cur.getDate()+iv); else if(r.FREQ==="WEEKLY") cur.setDate(cur.getDate()+7*iv);
+        else if(r.FREQ==="MONTHLY") cur.setMonth(cur.getMonth()+iv); else if(r.FREQ==="YEARLY") cur.setFullYear(cur.getFullYear()+iv); else break; }
+    }
+  }
+  return res;
 }
 function demoEvents(){
   const d=(h,m,add=0)=>{const x=new Date(); x.setDate(x.getDate()+add); x.setHours(h,m,0,0); return x;};
   return [{title:"Content-Planung Reels",start:d(9,30),loc:"Home Office"},{title:"Videoschnitt Woche 48",start:d(13,0)},
           {title:"Post veröffentlichen",start:d(18,0),loc:"Instagram"},{title:"Zahnarzt",start:d(10,15,1),loc:"Praxis"},{title:"Analytics-Review",start:d(16,0,2)}];
 }
+/* Öffentliche Proxys als Rückfall, falls der Kalenderdienst (z. B. iCloud) den direkten Abruf per CORS blockiert.
+   Eigener Proxy in ⚙ SETUP hat Vorrang. */
+const PUBLIC_PROXIES=["https://api.allorigins.win/raw?url=","https://corsproxy.io/?url="];
+async function fetchICS(url){
+  url=url.trim().replace(/^webcals?:\/\//i,"https://");
+  const tries = CFG.corsProxy ? [[CFG.corsProxy,"PROXY"]] : [["","DIREKT"],...PUBLIC_PROXIES.map(p=>[p,"ÜBER PROXY"])];
+  let lastErr;
+  for(const [px,how] of tries){
+    try{ const r=await fetch(px? px+encodeURIComponent(url) : url,{cache:"no-store"});
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      const t=await r.text(); if(!t.includes("BEGIN:VCALENDAR")) throw new Error("keine Kalenderdaten");
+      return {txt:t, how}; }
+    catch(e){ lastErr=e; }
+  }
+  throw lastErr;
+}
 async function loadCalendar(){
-  let evs, src;
+  let evs, src, how="";
+  const now=new Date(), from=new Date(now); from.setHours(0,0,0,0); const to=new Date(from); to.setDate(to.getDate()+7);
   if(!CFG.icsUrl){ evs=demoEvents(); src="DEMO"; }
   else try{
-    const r = await fetch((CFG.corsProxy||"")+ (CFG.corsProxy?encodeURIComponent(CFG.icsUrl):CFG.icsUrl));
-    evs = parseICS(await r.text()); src="ICAL";
+    const r=await fetchICS(CFG.icsUrl); evs=expandEvents(parseICS(r.txt),from,to); src="ICAL"; how=r.how;
   }catch(e){ evs=demoEvents(); src="FEHLER → DEMO"; console.warn("Kalender:",e); }
-  const now=new Date(), from=new Date(now); from.setHours(0,0,0,0); const to=new Date(from); to.setDate(to.getDate()+7);
   state.events = evs.filter(e=>e.start>=from && e.start<to).sort((a,b)=>a.start-b.start);
-  $("calSrc").innerHTML = src==="ICAL"?"ICAL · 7 TAGE":`7 TAGE <span class="tag">${src}</span>`;
+  $("calSrc").innerHTML = src==="ICAL"?`7 TAGE · ${how}`:`7 TAGE <span class="tag">${src}</span>`;
   $("events").innerHTML = state.events.length ? state.events.slice(0,8).map(e=>{
     const today=e.start.toDateString()===now.toDateString();
     const day= today?"HEUTE":e.start.toLocaleDateString("de-DE",{weekday:"short",day:"2-digit",month:"2-digit"}).toUpperCase();
