@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>J.A.R.V.I.S. Dashboard</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#02070d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="JARVIS">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=Rajdhani:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#02070d; --bg2:#06131f; --line:#0e3a52; --cyan:#3fe0ff; --cyan2:#9af0ff;
+  --dim:#4f7f95; --text:#cfefff; --warn:#ffb347; --bad:#ff4d6d; --ok:#39ffb0;
+  --glow:0 0 8px rgba(63,224,255,.55),0 0 22px rgba(63,224,255,.25);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:radial-gradient(ellipse at 50% 45%,#0a2235 0%,var(--bg) 65%) fixed,var(--bg);
+  color:var(--text); font-family:Rajdhani,system-ui,sans-serif; font-size:17px;
+  overflow:hidden; cursor:default;
+}
+/* Rasterlinien + Scanline */
+body::before{content:"";position:fixed;inset:0;pointer-events:none;
+  background-image:linear-gradient(rgba(63,224,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(63,224,255,.04) 1px,transparent 1px);
+  background-size:40px 40px;}
+body::after{content:"";position:fixed;left:0;right:0;height:120px;top:-120px;pointer-events:none;
+  background:linear-gradient(transparent,rgba(63,224,255,.06),transparent);animation:scan 7s linear infinite}
+@keyframes scan{to{top:100%}}
+
+.hud{display:grid;height:100vh;padding:18px;gap:18px;
+  grid-template-columns:minmax(260px,1fr) minmax(360px,1.25fr) minmax(260px,1fr);
+  grid-template-rows:auto 1fr 1fr auto;
+  grid-template-areas:
+   "top top top"
+   "weather core system"
+   "calendar core insta"
+   "voice voice voice";}
+header{grid-area:top;display:flex;justify-content:space-between;align-items:center;
+  font-family:Orbitron;letter-spacing:.25em;font-size:13px;color:var(--dim);
+  border-bottom:1px solid var(--line);padding-bottom:10px}
+header .brand{color:var(--cyan);text-shadow:var(--glow);font-weight:800;font-size:16px}
+header button{background:none;border:1px solid var(--line);color:var(--dim);font:inherit;
+  padding:6px 12px;cursor:pointer;letter-spacing:.2em}
+header button:hover{color:var(--cyan);border-color:var(--cyan)}
+
+.panel{position:relative;background:linear-gradient(160deg,rgba(10,40,60,.55),rgba(4,14,24,.7));
+  border:1px solid var(--line);padding:16px 18px;min-height:0;overflow:hidden;
+  clip-path:polygon(0 0,calc(100% - 18px) 0,100% 18px,100% 100%,18px 100%,0 calc(100% - 18px));}
+.panel::before{content:"";position:absolute;top:0;left:0;width:40px;height:2px;background:var(--cyan);box-shadow:var(--glow)}
+.panel h2{font-family:Orbitron;font-weight:600;font-size:12px;letter-spacing:.3em;color:var(--cyan);
+  margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+.panel h2 small{color:var(--dim);font-size:10px;letter-spacing:.15em}
+.tag{display:inline-block;font-size:10px;letter-spacing:.15em;padding:1px 6px;border:1px solid var(--warn);color:var(--warn);margin-left:6px;font-family:Orbitron}
+
+#weather{grid-area:weather} #system{grid-area:system} #calendar{grid-area:calendar} #insta{grid-area:insta}
+
+/* Wetter */
+.wx-now{display:flex;align-items:center;gap:16px}
+.wx-temp{font-family:Orbitron;font-size:54px;color:var(--cyan2);text-shadow:var(--glow);line-height:1}
+.wx-icon{font-size:44px;filter:drop-shadow(0 0 6px rgba(63,224,255,.6))}
+.wx-desc{color:var(--dim);font-size:15px}
+.wx-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:14px 0;font-size:14px}
+.wx-meta div{border-left:2px solid var(--line);padding-left:8px}
+.wx-meta b{display:block;color:var(--text);font-size:17px;font-weight:600}
+.wx-meta span{color:var(--dim);font-size:12px;letter-spacing:.1em}
+.wx-days{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;text-align:center;font-size:13px}
+.wx-days div{border:1px solid var(--line);padding:6px 2px}
+.wx-days .d{color:var(--dim);letter-spacing:.1em}
+.wx-days .i{font-size:20px}
+
+/* Kern / Reaktor */
+#core{grid-area:core;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative}
+.reactor{position:relative;width:min(44vh,90%);aspect-ratio:1}
+.reactor svg{position:absolute;inset:0;width:100%;height:100%}
+.spin{transform-origin:50% 50%;animation:rot 30s linear infinite}
+.spin.r{animation-direction:reverse;animation-duration:20s}
+.spin.f{animation-duration:9s}
+@keyframes rot{to{transform:rotate(360deg)}}
+.reactor .clock{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.clock .t{font-family:Orbitron;font-weight:800;font-size:clamp(28px,5.2vh,58px);color:var(--cyan2);text-shadow:var(--glow);letter-spacing:.06em}
+.clock .s{font-family:Orbitron;font-size:13px;color:var(--dim);letter-spacing:.3em;margin-top:4px}
+.clock .d{font-size:16px;color:var(--text);margin-top:8px;letter-spacing:.12em}
+.reactor.listening .core-glow{animation:pulse 1s ease-in-out infinite}
+.reactor.speaking .core-glow{animation:pulse .35s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.25}}
+.greeting{font-family:Orbitron;letter-spacing:.3em;font-size:13px;color:var(--cyan);margin-top:18px;text-align:center}
+
+/* System */
+.rows{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px dashed var(--line);padding-bottom:6px;font-size:15px}
+.row span{color:var(--dim);letter-spacing:.08em}
+.row b{font-weight:600}
+.ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+.bar{height:4px;background:var(--line);margin-top:-4px}
+.bar i{display:block;height:100%;background:var(--cyan);box-shadow:var(--glow);transition:width .6s}
+.spark{width:100%;height:46px;margin-top:6px}
+
+/* Termine */
+.events{list-style:none;display:flex;flex-direction:column;gap:8px;overflow:auto;max-height:100%}
+.events li{display:grid;grid-template-columns:70px 1fr;gap:10px;border-left:2px solid var(--cyan);padding:4px 0 4px 10px;background:rgba(63,224,255,.04)}
+.events li.past{opacity:.4;border-color:var(--dim)}
+.events .when{font-family:Orbitron;font-size:13px;color:var(--cyan2)}
+.events .when small{display:block;color:var(--dim);font-size:10px;letter-spacing:.1em}
+.events .what{font-size:16px;line-height:1.2}
+.events .where{display:block;font-size:13px;color:var(--dim)}
+.empty{color:var(--dim);font-size:14px}
+
+/* Instagram */
+.ig-head{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.ig-avatar{width:46px;height:46px;border-radius:50%;border:2px solid var(--cyan);box-shadow:var(--glow);background:#0b2233 center/cover;display:flex;align-items:center;justify-content:center;font-family:Orbitron;color:var(--cyan)}
+.ig-name{font-size:18px;font-weight:600}
+.ig-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin-bottom:12px}
+.ig-kpis div{border:1px solid var(--line);padding:8px 2px}
+.ig-kpis b{display:block;font-family:Orbitron;font-size:20px;color:var(--cyan2)}
+.ig-kpis span{font-size:11px;color:var(--dim);letter-spacing:.12em}
+.ig-posts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.ig-posts div{height:min(9vh,90px);border:1px solid var(--line);background:#071824 center/cover;position:relative;font-size:12px}
+.ig-posts div span{position:absolute;left:0;right:0;bottom:0;background:rgba(2,7,13,.75);padding:2px 4px;color:var(--text)}
+
+/* Sprache */
+#voice{grid-area:voice;display:flex;align-items:center;gap:16px;clip-path:none;padding:10px 16px}
+#mic{width:44px;height:44px;border-radius:50%;border:1px solid var(--cyan);background:rgba(63,224,255,.08);color:var(--cyan);font-size:20px;cursor:pointer;flex-shrink:0}
+#mic.on{background:var(--cyan);color:var(--bg);box-shadow:var(--glow)}
+.wave{display:flex;gap:3px;align-items:center;height:28px;flex-shrink:0}
+.wave i{width:3px;height:6px;background:var(--cyan);opacity:.4}
+.listening-now .wave i{animation:wv .8s ease-in-out infinite;opacity:1}
+.wave i:nth-child(2){animation-delay:.1s}.wave i:nth-child(3){animation-delay:.2s}.wave i:nth-child(4){animation-delay:.3s}.wave i:nth-child(5){animation-delay:.4s}
+@keyframes wv{50%{height:26px}}
+.log{flex:1;min-width:0;font-size:15px}
+.log .you{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.log .me{color:var(--cyan2)}
+.hint{color:var(--dim);font-size:12px;letter-spacing:.1em;text-align:right;flex-shrink:0}
+
+/* Einstellungen */
+dialog{margin:auto;background:var(--bg2);color:var(--text);border:1px solid var(--cyan);padding:24px;width:min(560px,92vw);box-shadow:var(--glow)}
+dialog::backdrop{background:rgba(0,0,0,.7)}
+dialog h3{font-family:Orbitron;letter-spacing:.25em;color:var(--cyan);font-size:14px;margin-bottom:16px}
+dialog label{display:block;font-size:13px;color:var(--dim);letter-spacing:.08em;margin:12px 0 4px}
+dialog input{width:100%;background:#020a12;border:1px solid var(--line);color:var(--text);padding:8px;font:inherit}
+dialog input:focus{outline:none;border-color:var(--cyan)}
+dialog p{font-size:13px;color:var(--dim);margin-top:4px}
+dialog .btns{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+dialog button{background:none;border:1px solid var(--cyan);color:var(--cyan);padding:8px 16px;font-family:Orbitron;letter-spacing:.15em;cursor:pointer}
+dialog button.primary{background:var(--cyan);color:var(--bg)}
+
+@media (max-width:1000px){
+  body{overflow:auto;font-size:16px}
+  .hud{height:auto;min-height:100vh;padding:12px 12px 90px;gap:12px;grid-template-columns:1fr;
+    grid-template-rows:none;grid-template-areas:"top" "core" "weather" "calendar" "system" "insta"}
+  header{flex-wrap:wrap;gap:8px;padding-top:env(safe-area-inset-top)}
+  header #status{order:3;width:100%;font-size:11px}
+  #fsBtn{display:none}
+  .reactor{width:min(64vw,300px)}
+  #voice.panel{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:50;background:#04101a;box-shadow:0 -10px 30px #02070d}
+  .clock .d{font-size:12px;text-align:center;max-width:70%;letter-spacing:.08em}
+  .hint{display:none}
+  .events{max-height:none}
+}
+</style>
+</head>
+<body>
+<div class="hud">
+  <header>
+    <div class="brand">J.A.R.V.I.S.</div>
+    <div id="status">SYSTEM ONLINE</div>
+    <div><button id="fsBtn" title="Vollbild (F)">VOLLBILD</button> <button id="notifBtn" title="Erinnerungen als Benachrichtigung">🔔</button> <button id="cfgBtn" title="Einstellungen">⚙ SETUP</button></div>
+  </header>
+
+  <section class="panel" id="weather">
+    <h2>WETTER <small id="wxCity">—</small></h2>
+    <div class="wx-now"><div class="wx-icon" id="wxIcon">·</div><div><div class="wx-temp" id="wxTemp">--°</div><div class="wx-desc" id="wxDesc">Lade Daten…</div></div></div>
+    <div class="wx-meta">
+      <div><b id="wxFeel">--</b><span>GEFÜHLT</span></div>
+      <div><b id="wxWind">--</b><span>WIND</span></div>
+      <div><b id="wxHum">--</b><span>LUFTFEUCHTE</span></div>
+    </div>
+    <div class="wx-days" id="wxDays"></div>
+  </section>
+
+  <section id="core">
+    <div class="reactor" id="reactor">
+      <svg viewBox="0 0 400 400" aria-hidden="true">
+        <defs>
+          <radialGradient id="cg"><stop offset="0" stop-color="#9af0ff" stop-opacity=".55"/><stop offset=".6" stop-color="#3fe0ff" stop-opacity=".08"/><stop offset="1" stop-color="#3fe0ff" stop-opacity="0"/></radialGradient>
+        </defs>
+        <circle class="core-glow" cx="200" cy="200" r="150" fill="url(#cg)"/>
+        <g class="spin"><circle cx="200" cy="200" r="190" fill="none" stroke="#3fe0ff" stroke-opacity=".35" stroke-width="1" stroke-dasharray="2 6"/></g>
+        <g class="spin r"><circle cx="200" cy="200" r="172" fill="none" stroke="#3fe0ff" stroke-width="3" stroke-dasharray="120 40 20 40" stroke-opacity=".7"/></g>
+        <g class="spin f"><circle cx="200" cy="200" r="156" fill="none" stroke="#9af0ff" stroke-width="1.5" stroke-dasharray="4 10" stroke-opacity=".8"/></g>
+        <circle cx="200" cy="200" r="140" fill="none" stroke="#0e3a52" stroke-width="10"/>
+        <circle id="secRing" cx="200" cy="200" r="140" fill="none" stroke="#3fe0ff" stroke-width="10" stroke-dasharray="879.6" stroke-dashoffset="879.6" transform="rotate(-90 200 200)" style="filter:drop-shadow(0 0 6px #3fe0ff)"/>
+        <g class="spin r" style="animation-duration:60s"><circle cx="200" cy="200" r="122" fill="none" stroke="#3fe0ff" stroke-opacity=".25" stroke-width="18" stroke-dasharray="1 5"/></g>
+      </svg>
+      <div class="clock"><div class="t" id="clockT">--:--</div><div class="s" id="clockS">SEK --</div><div class="d" id="clockD">—</div></div>
+    </div>
+    <div class="greeting" id="greeting">GUTEN TAG, SIR.</div>
+  </section>
+
+  <section class="panel" id="system">
+    <h2>SYSTEMSTATUS <small id="sysTime">—</small></h2>
+    <div class="rows">
+      <div class="row"><span>INTERNET</span><b id="netState">—</b></div>
+      <div class="row"><span>LATENZ</span><b id="netPing">—</b></div>
+      <div class="row"><span>VERBINDUNGSTYP</span><b id="netType">—</b></div>
+      <div class="row"><span>BANDBREITE (GESCHÄTZT)</span><b id="netDown">—</b></div>
+      <div class="row"><span>AKKU</span><b id="bat">—</b></div>
+      <div class="row"><span>CPU-KERNE / RAM</span><b id="hw">—</b></div>
+      <div class="row"><span>LAUFZEIT DASHBOARD</span><b id="uptime">—</b></div>
+    </div>
+    <svg class="spark" id="pingSpark" viewBox="0 0 300 46" preserveAspectRatio="none"><polyline fill="none" stroke="#3fe0ff" stroke-width="1.5" points=""/></svg>
+  </section>
+
+  <section class="panel" id="calendar">
+    <h2>TERMINE <small id="calSrc">—</small></h2>
+    <ul class="events" id="events"><li class="empty">Lade Termine…</li></ul>
+  </section>
+
+  <section class="panel" id="insta">
+    <h2>INSTAGRAM <small id="igSrc">—</small></h2>
+    <div class="ig-head"><div class="ig-avatar" id="igAvatar">IG</div><div><div class="ig-name" id="igName">—</div><div class="wx-desc" id="igSub">—</div></div></div>
+    <div class="ig-kpis">
+      <div><b id="igFollowers">—</b><span>FOLLOWER</span></div>
+      <div><b id="igPosts">—</b><span>BEITRÄGE</span></div>
+      <div><b id="igEng">—</b><span>Ø LIKES</span></div>
+    </div>
+    <div class="ig-posts" id="igGrid"></div>
+  </section>
+
+  <section class="panel" id="voice">
+    <button id="mic" title="Sprachsteuerung an/aus (Leertaste)">🎙</button>
+    <div class="wave"><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="log"><div class="you" id="heard">Sprachsteuerung aus. Mikrofon antippen, dann „Jarvis, …“ sagen.</div><div class="me" id="said"></div></div>
+    <div class="hint">„JARVIS, WIE IST DAS WETTER?“<br>„JARVIS, WAS STEHT HEUTE AN?“</div>
+  </section>
+</div>
+
+<dialog id="cfg">
+  <h3>EINSTELLUNGEN</h3>
+  <label>Stadt fürs Wetter</label><input id="cCity" placeholder="z. B. Berlin">
+  <label>Anrede</label><input id="cName" placeholder="z. B. Sir, Dado">
+  <label>Kalender (öffentliche/geheime iCal-Adresse, .ics)</label><input id="cIcs" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics">
+  <p>Google Kalender: Einstellungen › Kalender › „Privatadresse im iCal-Format“. Leer lassen = Demo-Termine.</p>
+  <label>Instagram User-ID (Business/Creator-Konto)</label><input id="cIgId" placeholder="1784…">
+  <label>Instagram Access Token (Graph API)</label><input id="cIgTok" type="password" placeholder="EAAG…">
+  <p>Wird nur lokal in diesem Browser gespeichert. Leer lassen = Demo-Daten.</p>
+  <label>CORS-Proxy (optional, für den Kalender)</label><input id="cProxy" placeholder="z. B. https://corsproxy.io/?url=">
+  <div class="btns"><button id="cCancel">ABBRECHEN</button><button class="primary" id="cSave">SPEICHERN</button></div>
+</dialog>
+
+<script>
+/* ================================================================
+   KONFIGURATION – Standardwerte. Über ⚙ SETUP änderbar (wird im
+   Browser gespeichert). ANNAHMEN sind mit [ANNAHME] markiert.
+   ================================================================ */
+const DEFAULTS = {
+  city: "Berlin",            // [ANNAHME] Stadt fürs Wetter
+  name: "Sir",               // Anrede
+  icsUrl: "",                // [PLATZHALTER] iCal-Link des Kalenders
+  corsProxy: "",             // optional, falls der Kalender CORS blockiert
+  igUserId: "",              // [PLATZHALTER] Instagram Graph API User-ID
+  igToken: "",               // [PLATZHALTER] Instagram Graph API Token
+  wakeWord: "jarvis",
+  lang: "de-DE"
+};
+let CFG = {...DEFAULTS};
+try { Object.assign(CFG, JSON.parse(localStorage.getItem("jarvis-cfg")||"{}")); } catch(e){}
+
+const $ = id => document.getElementById(id);
+const fmtTime = d => d.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"});
+const state = { weather:null, events:[], ig:null, net:{} };
+
+/* ---------------- Uhr ---------------- */
+const started = Date.now();
+function tick(){
+  const n = new Date();
+  $("clockT").textContent = fmtTime(n);
+  $("clockS").textContent = "SEK " + String(n.getSeconds()).padStart(2,"0");
+  $("clockD").textContent = n.toLocaleDateString("de-DE",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).toUpperCase();
+  $("secRing").style.strokeDashoffset = 879.6 * (1 - (n.getSeconds()+n.getMilliseconds()/1000)/60);
+  const h = n.getHours();
+  const g = h<5?"GUTE NACHT":h<11?"GUTEN MORGEN":h<18?"GUTEN TAG":"GUTEN ABEND";
+  $("greeting").textContent = `${g}, ${CFG.name.toUpperCase()}.`;
+  const s = Math.floor((Date.now()-started)/1000);
+  $("uptime").textContent = `${Math.floor(s/3600)}h ${String(Math.floor(s/60)%60).padStart(2,"0")}m`;
+  requestAnimationFrame(tick);
+}
+
+/* ---------------- Wetter (Open-Meteo, ohne API-Key) ---------------- */
+const WMO = {0:["☀️","Klar"],1:["🌤️","Überwiegend klar"],2:["⛅","Teilweise bewölkt"],3:["☁️","Bedeckt"],45:["🌫️","Nebel"],48:["🌫️","Raureif-Nebel"],
+ 51:["🌦️","Leichter Niesel"],53:["🌦️","Niesel"],55:["🌧️","Starker Niesel"],61:["🌦️","Leichter Regen"],63:["🌧️","Regen"],65:["🌧️","Starker Regen"],
+ 66:["🌧️","Gefrierender Regen"],67:["🌧️","Gefrierender Regen"],71:["🌨️","Leichter Schneefall"],73:["🌨️","Schneefall"],75:["❄️","Starker Schneefall"],77:["❄️","Schneegriesel"],
+ 80:["🌦️","Regenschauer"],81:["🌧️","Regenschauer"],82:["⛈️","Heftige Schauer"],85:["🌨️","Schneeschauer"],86:["🌨️","Schneeschauer"],95:["⛈️","Gewitter"],96:["⛈️","Gewitter mit Hagel"],99:["⛈️","Gewitter mit Hagel"]};
+async function loadWeather(){
+  try{
+    const g = await (await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(CFG.city)}&count=1&language=de`)).json();
+    if(!g.results?.length) throw new Error("Stadt nicht gefunden");
+    const {latitude:lat, longitude:lon, name} = g.results[0];
+    const w = await (await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=5`)).json();
+    const c = w.current, [ic,desc] = WMO[c.weather_code]||["·","—"];
+    state.weather = {name, temp:Math.round(c.temperature_2m), desc, feel:Math.round(c.apparent_temperature), wind:Math.round(c.wind_speed_10m), hum:c.relative_humidity_2m,
+                     max:Math.round(w.daily.temperature_2m_max[0]), min:Math.round(w.daily.temperature_2m_min[0]), rain:w.daily.precipitation_probability_max[0]};
+    $("wxCity").textContent = name.toUpperCase();
+    $("wxIcon").textContent = ic; $("wxTemp").textContent = state.weather.temp+"°"; $("wxDesc").textContent = `${desc} · ${state.weather.min}° / ${state.weather.max}°`;
+    $("wxFeel").textContent = state.weather.feel+"°"; $("wxWind").textContent = state.weather.wind+" km/h"; $("wxHum").textContent = c.relative_humidity_2m+" %";
+    $("wxDays").innerHTML = w.daily.time.map((t,i)=>{
+      const d = new Date(t+"T12:00"); const [di] = WMO[w.daily.weather_code[i]]||["·"];
+      return `<div><div class="d">${i?d.toLocaleDateString("de-DE",{weekday:"short"}).toUpperCase():"HEUTE"}</div><div class="i">${di}</div>${Math.round(w.daily.temperature_2m_max[i])}° <span style="color:var(--dim)">${Math.round(w.daily.temperature_2m_min[i])}°</span><div style="color:var(--dim);font-size:11px">${w.daily.precipitation_probability_max[i]??0}% ☂</div></div>`;
+    }).join("");
+  }catch(e){ $("wxDesc").textContent = "Wetter nicht verfügbar: "+e.message; }
+}
+
+/* ---------------- Termine (iCal / .ics) ---------------- */
+function parseICS(txt){
+  const lines = txt.replace(/\r?\n[ \t]/g,"").split(/\r?\n/); const out=[]; let ev=null;
+  const toDate = (v,allDay)=>{ const m=v.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?/); if(!m) return null;
+    return m[7]? new Date(Date.UTC(+m[1],m[2]-1,+m[3],+m[4],+m[5])) : new Date(+m[1],m[2]-1,+m[3],+(m[4]||0),+(m[5]||0)); };
+  for(const l of lines){
+    if(l==="BEGIN:VEVENT") ev={};
+    else if(l==="END:VEVENT"){ if(ev?.start) out.push(ev); ev=null; }
+    else if(ev){ const i=l.indexOf(":"); const k=l.slice(0,i), v=l.slice(i+1).replace(/\\,/g,",").replace(/\\n/g," ");
+      if(k.startsWith("DTSTART")){ ev.allDay=k.includes("VALUE=DATE")&&!v.includes("T"); ev.start=toDate(v); }
+      else if(k.startsWith("DTEND")) ev.end=toDate(v);
+      else if(k==="SUMMARY") ev.title=v; else if(k==="LOCATION") ev.loc=v; }
+  }
+  return out; // Hinweis: wiederkehrende Termine (RRULE) werden in V1 nicht aufgelöst
+}
+function demoEvents(){
+  const d=(h,m,add=0)=>{const x=new Date(); x.setDate(x.getDate()+add); x.setHours(h,m,0,0); return x;};
+  return [{title:"Content-Planung Reels",start:d(9,30),loc:"Home Office"},{title:"Videoschnitt Woche 48",start:d(13,0)},
+          {title:"Post veröffentlichen",start:d(18,0),loc:"Instagram"},{title:"Zahnarzt",start:d(10,15,1),loc:"Praxis"},{title:"Analytics-Review",start:d(16,0,2)}];
+}
+async function loadCalendar(){
+  let evs, src;
+  if(!CFG.icsUrl){ evs=demoEvents(); src="DEMO"; }
+  else try{
+    const r = await fetch((CFG.corsProxy||"")+ (CFG.corsProxy?encodeURIComponent(CFG.icsUrl):CFG.icsUrl));
+    evs = parseICS(await r.text()); src="ICAL";
+  }catch(e){ evs=demoEvents(); src="FEHLER → DEMO"; console.warn("Kalender:",e); }
+  const now=new Date(), from=new Date(now); from.setHours(0,0,0,0); const to=new Date(from); to.setDate(to.getDate()+7);
+  state.events = evs.filter(e=>e.start>=from && e.start<to).sort((a,b)=>a.start-b.start);
+  $("calSrc").innerHTML = src==="ICAL"?"ICAL · 7 TAGE":`7 TAGE <span class="tag">${src}</span>`;
+  $("events").innerHTML = state.events.length ? state.events.slice(0,8).map(e=>{
+    const today=e.start.toDateString()===now.toDateString();
+    const day= today?"HEUTE":e.start.toLocaleDateString("de-DE",{weekday:"short",day:"2-digit",month:"2-digit"}).toUpperCase();
+    return `<li class="${!e.allDay&&e.start<now&&today?"past":""}"><div class="when">${e.allDay?"GANZT.":fmtTime(e.start)}<small>${day}</small></div><div class="what">${esc(e.title||"(ohne Titel)")}${e.loc?`<span class="where">${esc(e.loc)}</span>`:""}</div></li>`;
+  }).join("") : `<li class="empty">Keine Termine in den nächsten 7 Tagen.</li>`;
+}
+const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ---------------- Systemwerte ---------------- */
+const pings=[];
+async function checkNet(){
+  const online = navigator.onLine; let ms=null;
+  if(online){ const t=performance.now();
+    try{ await fetch("https://www.google.com/generate_204?"+Date.now(),{mode:"no-cors",cache:"no-store"}); ms=Math.round(performance.now()-t);}catch(e){} }
+  state.net={online:online&&ms!==null, ms};
+  $("netState").innerHTML = state.net.online?'<span class="ok">● VERBUNDEN</span>':'<span class="bad">● OFFLINE</span>';
+  $("status").innerHTML = state.net.online?"SYSTEM ONLINE":'<span class="bad">VERBINDUNG UNTERBROCHEN</span>';
+  $("netPing").innerHTML = ms===null?"—":`<span class="${ms<80?"ok":ms<200?"warn":"bad"}">${ms} ms</span>`;
+  pings.push(ms??0); if(pings.length>40) pings.shift();
+  const mx=Math.max(100,...pings); $("pingSpark").querySelector("polyline").setAttribute("points",pings.map((p,i)=>`${i*300/39},${44-p/mx*40}`).join(" "));
+  const c=navigator.connection;
+  $("netType").textContent = c? (c.type&&c.type!=="unknown"?c.type.toUpperCase()+" · ":"")+(c.effectiveType||"").toUpperCase() : "n. v. (Browser)";
+  $("netDown").textContent = c?.downlink? `${c.downlink} Mbit/s` : "n. v. (Browser)";
+  $("sysTime").textContent = "AKTUALISIERT "+fmtTime(new Date());
+}
+async function initSys(){
+  $("hw").textContent = `${navigator.hardwareConcurrency||"?"} / ${navigator.deviceMemory?navigator.deviceMemory+" GB":"?"}`;
+  if(navigator.getBattery){ const b=await navigator.getBattery(); const upd=()=>{$("bat").innerHTML=`<span class="${b.level<.2?"bad":b.level<.5?"warn":"ok"}">${Math.round(b.level*100)} %</span>${b.charging?" ⚡":""}`;}; upd(); b.onlevelchange=b.onchargingchange=upd; }
+  else $("bat").textContent="Netzbetrieb / n. v.";
+  addEventListener("online",checkNet); addEventListener("offline",checkNet);
+  checkNet(); setInterval(checkNet,15000);
+}
+
+/* ---------------- Instagram (Graph API) ---------------- */
+const nf = n => n>=1e6?(n/1e6).toFixed(1).replace(".",",")+" Mio":n>=1e4?(n/1e3).toFixed(1).replace(".",",")+"k":n.toLocaleString("de-DE");
+async function loadInsta(){
+  let d, src;
+  if(CFG.igUserId && CFG.igToken){
+    try{
+      const base="https://graph.facebook.com/v21.0/";
+      const p = await (await fetch(`${base}${CFG.igUserId}?fields=username,name,followers_count,media_count,profile_picture_url&access_token=${CFG.igToken}`)).json();
+      if(p.error) throw new Error(p.error.message);
+      const m = await (await fetch(`${base}${CFG.igUserId}/media?fields=caption,like_count,comments_count,media_type,thumbnail_url,media_url,timestamp&limit=6&access_token=${CFG.igToken}`)).json();
+      const posts=(m.data||[]).map(x=>({likes:x.like_count||0,comments:x.comments_count||0,img:x.thumbnail_url||x.media_url}));
+      d={username:p.username,name:p.name,followers:p.followers_count,media:p.media_count,pic:p.profile_picture_url,posts}; src="LIVE";
+    }catch(e){ console.warn("Instagram:",e); d=null; src="FEHLER → DEMO"; }
+  }
+  if(!d){ d={username:"dein_faceless_profil",name:"Faceless Channel",followers:12840,media:146,posts:[812,1204,655,980,1530,720].map((l,i)=>({likes:l,comments:Math.round(l/18)}))}; src=src||"DEMO"; }
+  state.ig=d; const avg=d.posts.length?Math.round(d.posts.reduce((a,p)=>a+p.likes,0)/d.posts.length):0; d.avg=avg;
+  $("igSrc").innerHTML = src==="LIVE"?"LIVE":`<span class="tag">${src}</span>`;
+  $("igName").textContent="@"+d.username; $("igSub").textContent=d.name||"";
+  if(d.pic){ $("igAvatar").style.backgroundImage=`url(${d.pic})`; $("igAvatar").textContent=""; }
+  $("igFollowers").textContent=nf(d.followers); $("igPosts").textContent=nf(d.media); $("igEng").textContent=nf(avg);
+  $("igGrid").innerHTML=d.posts.slice(0,6).map(p=>`<div style="${p.img?`background-image:url(${p.img})`:""}"><span>♥ ${nf(p.likes)} · 💬 ${p.comments}</span></div>`).join("");
+}
+
+/* ---------------- Sprache ---------------- */
+const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec=null, listening=false, awaitingCmd=false, awaitTimer=null;
+function speak(text){
+  $("said").textContent = "JARVIS: "+text;
+  if(!("speechSynthesis" in window)) return;
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text); u.lang=CFG.lang; u.rate=1.02; u.pitch=.9;
+  const v=speechSynthesis.getVoices().filter(v=>v.lang.startsWith("de")); u.voice=v.find(v=>/male|mann|markus|stefan|conrad|google/i.test(v.name))||v[0]||null;
+  $("reactor").classList.add("speaking"); u.onend=()=>$("reactor").classList.remove("speaking");
+  speechSynthesis.speak(u);
+}
+function answer(cmd){
+  const c=cmd.toLowerCase(), n=new Date(), w=state.weather;
+  if(/wetter|temperatur|regen|draußen|kalt|warm/.test(c))
+    return w? `In ${w.name} sind es aktuell ${w.temp} Grad, ${w.desc}. Gefühlt ${w.feel} Grad. Heute zwischen ${w.min} und ${w.max} Grad, Regenwahrscheinlichkeit ${w.rain ?? 0} Prozent.` : "Die Wetterdaten sind gerade nicht verfügbar.";
+  if(/termin|kalender|steht.*an|heute.*vor|morgen/.test(c)){
+    const tom=/morgen/.test(c); const day=new Date(); if(tom) day.setDate(day.getDate()+1);
+    const list=state.events.filter(e=>e.start.toDateString()===day.toDateString() && (tom||e.allDay||e.start>=n));
+    if(!list.length) return tom?"Morgen haben Sie keine Termine.":"Heute stehen keine weiteren Termine an.";
+    return `${tom?"Morgen":"Heute"} ${list.length===1?"steht ein Termin":"stehen "+list.length+" Termine"} an: `+list.slice(0,4).map(e=>(e.allDay?"ganztägig ":"um "+fmtTime(e.start)+" ")+e.title).join(", ")+".";
+  }
+  if(/uhr|spät|zeit/.test(c)) return `Es ist ${n.getHours()} Uhr ${n.getMinutes()}.`;
+  if(/datum|welcher tag|wochentag/.test(c)) return "Heute ist "+n.toLocaleDateString("de-DE",{weekday:"long",day:"numeric",month:"long"})+".";
+  if(/internet|verbindung|netz|online|ping|wlan/.test(c))
+    return state.net.online?`Die Internetverbindung steht. Latenz ${state.net.ms} Millisekunden.`:"Achtung, keine Internetverbindung.";
+  if(/instagram|follower|insta|likes|profil/.test(c)){ const g=state.ig; return g?`Ihr Profil ${g.username} hat ${g.followers.toLocaleString("de-DE")} Follower und ${g.media} Beiträge. Die letzten Beiträge haben im Schnitt ${g.avg} Likes.`:"Keine Instagram-Daten vorhanden."; }
+  if(/status|bericht|überblick|zusammenfassung|briefing/.test(c))
+    return [answer("wetter"),answer("termine heute"),answer("internet")].join(" ");
+  if(/vollbild/.test(c)){ toggleFS(); return "Vollbild umgeschaltet."; }
+  if(/aktualisier|neu laden|refresh/.test(c)){ refreshAll(); return "Alle Daten werden aktualisiert."; }
+  if(/danke/.test(c)) return "Immer gern, "+CFG.name+".";
+  if(/wer bist du|was kannst du|hilfe/.test(c)) return "Ich bin Jarvis. Fragen Sie mich nach Wetter, Terminen, Uhrzeit, Internetverbindung, Instagram oder einem Statusbericht.";
+  return "Das habe ich leider nicht verstanden. Sagen Sie zum Beispiel: Jarvis, Statusbericht.";
+}
+function handle(text){
+  const t=text.toLowerCase().trim(); const ww=CFG.wakeWord.toLowerCase();
+  const idx=t.search(new RegExp(ww+"|dschawis|tscharvis|jervis|travis"));
+  if(idx>=0){
+    const cmd=t.slice(idx).replace(/^\S+[,!.\s]*/,"");
+    if(cmd.length<3){ awaitingCmd=true; clearTimeout(awaitTimer); awaitTimer=setTimeout(()=>awaitingCmd=false,8000); speak("Ja, "+CFG.name+"?"); return; }
+    speak(answer(cmd)); return;
+  }
+  if(awaitingCmd){ awaitingCmd=false; speak(answer(t)); }
+}
+function startRec(){
+  if(!SR){ $("heard").textContent="Spracherkennung wird von diesem Browser nicht unterstützt. Bitte Chrome oder Edge verwenden."; return; }
+  rec=new SR(); rec.lang=CFG.lang; rec.continuous=true; rec.interimResults=true;
+  rec.onresult=e=>{ for(let i=e.resultIndex;i<e.results.length;i++){ const r=e.results[i]; $("heard").textContent="Gehört: "+r[0].transcript; if(r.isFinal) handle(r[0].transcript);} };
+  rec.onerror=e=>{ if(e.error==="not-allowed"){ $("heard").textContent="Mikrofon-Zugriff verweigert."; stopRec(); } };
+  rec.onend=()=>{ if(listening) try{rec.start();}catch(e){} };  // Dauerbetrieb: automatisch neu starten
+  rec.start(); listening=true; $("mic").classList.add("on"); $("voice").classList.add("listening-now"); $("reactor").classList.add("listening");
+  $("heard").textContent=`Höre zu… sagen Sie „${CFG.wakeWord[0].toUpperCase()+CFG.wakeWord.slice(1)}, …“`;
+  try{ localStorage.setItem("jarvis-voice","1"); }catch(e){}
+}
+function stopRec(){ listening=false; rec&&rec.stop(); $("mic").classList.remove("on"); $("voice").classList.remove("listening-now"); $("reactor").classList.remove("listening"); try{localStorage.removeItem("jarvis-voice");}catch(e){} }
+$("mic").onclick=()=> listening?stopRec():startRec();
+
+/* ---------------- Bedienung ---------------- */
+function toggleFS(){ document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen().catch(()=>{}); }
+$("fsBtn").onclick=toggleFS;
+addEventListener("keydown",e=>{ if(e.target.tagName==="INPUT") return;
+  if(e.key==="f"||e.key==="F") toggleFS();
+  if(e.code==="Space"){ e.preventDefault(); $("mic").click(); } });
+const fields={cCity:"city",cName:"name",cIcs:"icsUrl",cIgId:"igUserId",cIgTok:"igToken",cProxy:"corsProxy"};
+$("cfgBtn").onclick=()=>{ for(const [id,k] of Object.entries(fields)) $(id).value=CFG[k]||""; $("cfg").showModal(); };
+$("cCancel").onclick=()=>$("cfg").close();
+$("cSave").onclick=()=>{ for(const [id,k] of Object.entries(fields)) CFG[k]=$(id).value.trim()||DEFAULTS[k];
+  try{ localStorage.setItem("jarvis-cfg",JSON.stringify(CFG)); }catch(e){} $("cfg").close(); refreshAll(); speak("Einstellungen gespeichert."); };
+
+/* ---------------- Benachrichtigungen (Terminerinnerung 15 Min vorher) ----------------
+   Funktioniert, solange die App geöffnet ist oder im Hintergrund läuft.
+   Echte Push-Nachrichten bei geschlossener App brauchen den späteren Server. */
+const notified=new Set();
+function updNotifBtn(){ const b=$("notifBtn"); if(!("Notification" in window)){ b.style.display="none"; return; }
+  b.style.color = Notification.permission==="granted"?"var(--cyan)":""; b.style.borderColor = Notification.permission==="granted"?"var(--cyan)":""; }
+$("notifBtn").onclick=async()=>{ if(!("Notification" in window)) return;
+  const r=await Notification.requestPermission(); updNotifBtn();
+  if(r==="granted") notify("JARVIS","Benachrichtigungen sind aktiv. Ich erinnere Sie 15 Minuten vor jedem Termin.","welcome"); };
+async function notify(title,body,tag){
+  if(!("Notification" in window)||Notification.permission!=="granted") return;
+  const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
+  if(reg) reg.showNotification(title,{body,icon:"icon-192.png",tag}); else new Notification(title,{body,icon:"icon-192.png",tag});
+}
+function checkReminders(){
+  const now=Date.now();
+  for(const e of state.events){ if(e.allDay) continue; const dt=e.start-now, key=e.title+e.start.getTime();
+    if(dt>0 && dt<=15*60e3 && !notified.has(key)){ notified.add(key);
+      notify("Termin in "+Math.max(1,Math.round(dt/60e3))+" Min", (e.title||"Termin")+" um "+fmtTime(e.start)+(e.loc?" · "+e.loc:""), key); } }
+  if(state.net.online===false && !notified.has("offline")){ notified.add("offline"); notify("JARVIS","Achtung: Internetverbindung unterbrochen.","offline"); }
+  if(state.net.online) notified.delete("offline");
+}
+updNotifBtn(); setInterval(checkReminders,30e3);
+if("serviceWorker" in navigator && location.protocol!=="file:") navigator.serviceWorker.register("sw.js").catch(e=>console.warn("SW:",e));
+
+function refreshAll(){ loadWeather(); loadCalendar(); loadInsta(); checkNet(); }
+tick(); initSys(); refreshAll();
+setInterval(loadWeather,15*60e3); setInterval(loadCalendar,5*60e3); setInterval(loadInsta,30*60e3);
+speechSynthesis?.getVoices(); // Stimmen vorladen
+try{ if(localStorage.getItem("jarvis-voice")) startRec(); }catch(e){}
+</script>
+</body>
+</html>
