@@ -144,7 +144,11 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 dialog h3{font-family:Orbitron;letter-spacing:.25em;color:var(--cyan);font-size:14px;margin-bottom:16px}
 dialog label{display:block;font-size:13px;color:var(--dim);letter-spacing:.08em;margin:12px 0 4px}
 dialog input{width:100%;background:#020a12;border:1px solid var(--line);color:var(--text);padding:8px;font:inherit}
-dialog input:focus{outline:none;border-color:var(--cyan)}
+dialog input:focus,dialog select:focus{outline:none;border-color:var(--cyan)}
+dialog select{width:100%;background:#020a12;border:1px solid var(--line);color:var(--text);padding:8px;font:inherit}
+dialog input[type=range]{padding:0;border:none;background:none;accent-color:var(--cyan)}
+dialog .row{display:flex;gap:10px;align-items:center}
+dialog .row select{flex:1}
 dialog p{font-size:13px;color:var(--dim);margin-top:4px}
 dialog .btns{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
 dialog button{background:none;border:1px solid var(--cyan);color:var(--cyan);padding:8px 16px;font-family:Orbitron;letter-spacing:.15em;cursor:pointer}
@@ -251,6 +255,10 @@ dialog button.primary{background:var(--cyan);color:var(--bg)}
   <label>Instagram Access Token (Graph API)</label><input id="cIgTok" type="password" placeholder="EAAG…">
   <p>Wird nur lokal in diesem Browser gespeichert. Leer lassen = Demo-Daten.</p>
   <label>Kalender-Proxy (nötig für iCloud/Google)</label><input id="cProxy" placeholder="https://jarvis-kalender.DEINNAME.workers.dev/?url=">
+  <label>Stimme</label><div class="row"><select id="cVoice"></select><button type="button" id="cVoiceTest">TEST</button></div>
+  <label>Tonhöhe <span id="cPitchV"></span></label><input id="cPitch" type="range" min="0.5" max="1.5" step="0.05">
+  <label>Tempo <span id="cRateV"></span></label><input id="cRate" type="range" min="0.6" max="1.5" step="0.05">
+  <p>★ = natürliche (neuronale) Stimme, klingt am flüssigsten. Am besten in Microsoft Edge: „Conrad Online (Natural)“ oder „Florian Online (Natural)“. iPhone: Einstellungen › Bedienungshilfen › Gesprochene Inhalte › Stimmen › Deutsch › eine „Premium“- oder „Erweitert“-Stimme laden. Chrome: „Google Deutsch“. Tonhöhe und Tempo bei 1 klingen am natürlichsten.</p>
   <div class="btns"><button id="cCancel">ABBRECHEN</button><button class="primary" id="cSave">SPEICHERN</button></div>
 </dialog>
 
@@ -267,7 +275,10 @@ const DEFAULTS = {
   igUserId: "",              // [PLATZHALTER] Instagram Graph API User-ID
   igToken: "",               // [PLATZHALTER] Instagram Graph API Token
   wakeWord: "jarvis",
-  lang: "de-DE"
+  lang: "de-DE",
+  voiceName: "",             // leer = automatisch (männliche deutsche Stimme bevorzugt)
+  pitch: 1,                  // Tonhöhe 0.5–1.5 (1 klingt am natürlichsten)
+  rate: 1                    // Tempo 0.6–1.5
 };
 let CFG = {...DEFAULTS};
 try { Object.assign(CFG, JSON.parse(localStorage.getItem("jarvis-cfg")||"{}")); } catch(e){}
@@ -448,12 +459,21 @@ async function loadInsta(){
 /* ---------------- Sprache ---------------- */
 const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
 let rec=null, listening=false, awaitingCmd=false, awaitTimer=null;
-function speak(text){
+function pickVoice(name){
+  const all=speechSynthesis.getVoices();
+  if(name){ const m=all.find(v=>v.name===name); if(m) return m; }
+  const de=all.filter(v=>v.lang.startsWith("de"));
+  const male=/conrad|florian|killian|markus|yannick|stefan|male|mann/i, natural=/natural|online|premium|enhanced|neural/i;
+  return de.find(v=>natural.test(v.name)&&male.test(v.name))||de.find(v=>natural.test(v.name))
+      ||de.find(v=>/google/i.test(v.name))||de.find(v=>male.test(v.name))||de[0]||null;
+}
+function speak(text,opt={}){
   $("said").textContent = "JARVIS: "+text;
   if(!("speechSynthesis" in window)) return;
   speechSynthesis.cancel();
-  const u=new SpeechSynthesisUtterance(text); u.lang=CFG.lang; u.rate=1.02; u.pitch=.9;
-  const v=speechSynthesis.getVoices().filter(v=>v.lang.startsWith("de")); u.voice=v.find(v=>/male|mann|markus|stefan|conrad|google/i.test(v.name))||v[0]||null;
+  const o={voiceName:CFG.voiceName,pitch:CFG.pitch,rate:CFG.rate,...opt};
+  const u=new SpeechSynthesisUtterance(text); u.lang=CFG.lang; u.rate=+o.rate||1; u.pitch=+o.pitch||1;
+  u.voice=pickVoice(o.voiceName); if(u.voice) u.lang=u.voice.lang;
   $("reactor").classList.add("speaking"); u.onend=()=>$("reactor").classList.remove("speaking");
   speechSynthesis.speak(u);
 }
@@ -510,9 +530,22 @@ addEventListener("keydown",e=>{ if(e.target.tagName==="INPUT") return;
   if(e.key==="f"||e.key==="F") toggleFS();
   if(e.code==="Space"){ e.preventDefault(); $("mic").click(); } });
 const fields={cCity:"city",cName:"name",cIcs:"icsUrl",cIgId:"igUserId",cIgTok:"igToken",cProxy:"corsProxy"};
-$("cfgBtn").onclick=()=>{ for(const [id,k] of Object.entries(fields)) $(id).value=CFG[k]||""; $("cfg").showModal(); };
+function fillVoices(){
+  const sel=$("cVoice"); if(!sel || !("speechSynthesis" in window)) return;
+  const nat=v=>/natural|online|premium|enhanced|neural/i.test(v.name);
+  const all=speechSynthesis.getVoices().slice().sort((a,b)=>(b.lang.startsWith("de")-a.lang.startsWith("de"))||(nat(b)-nat(a))||(b.lang.startsWith("en")-a.lang.startsWith("en"))||a.name.localeCompare(b.name));
+  const cur=sel.value||CFG.voiceName||"";
+  sel.innerHTML='<option value="">Automatisch (deutsche Männerstimme)</option>'+all.map(v=>`<option value="${v.name.replace(/"/g,"&quot;")}">${nat(v)?"★ ":""}${v.name} (${v.lang})</option>`).join("");
+  sel.value=all.some(v=>v.name===cur)?cur:"";
+}
+if("speechSynthesis" in window) speechSynthesis.addEventListener?.("voiceschanged",fillVoices);
+const showSl=()=>{ $("cPitchV").textContent=(+$("cPitch").value).toFixed(2); $("cRateV").textContent=(+$("cRate").value).toFixed(2); };
+$("cPitch").oninput=showSl; $("cRate").oninput=showSl;
+$("cVoiceTest").onclick=()=>speak(`Guten Tag, ${$("cName").value.trim()||CFG.name}. Alle Systeme sind einsatzbereit.`,{voiceName:$("cVoice").value,pitch:$("cPitch").value,rate:$("cRate").value});
+$("cfgBtn").onclick=()=>{ for(const [id,k] of Object.entries(fields)) $(id).value=CFG[k]||""; fillVoices(); $("cVoice").value=CFG.voiceName||""; $("cPitch").value=CFG.pitch; $("cRate").value=CFG.rate; showSl(); $("cfg").showModal(); };
 $("cCancel").onclick=()=>$("cfg").close();
 $("cSave").onclick=()=>{ for(const [id,k] of Object.entries(fields)) CFG[k]=$(id).value.trim()||DEFAULTS[k];
+  CFG.voiceName=$("cVoice").value; CFG.pitch=+$("cPitch").value; CFG.rate=+$("cRate").value;
   try{ localStorage.setItem("jarvis-cfg",JSON.stringify(CFG)); }catch(e){} $("cfg").close(); refreshAll(); speak("Einstellungen gespeichert."); };
 
 /* ---------------- Benachrichtigungen (Terminerinnerung 15 Min vorher) ----------------
