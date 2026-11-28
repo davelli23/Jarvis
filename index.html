@@ -255,7 +255,7 @@ dialog button.primary{background:var(--cyan);color:var(--bg)}
   <label>Instagram Access Token (Graph API)</label><input id="cIgTok" type="password" placeholder="EAAG…">
   <p>Wird nur lokal in diesem Browser gespeichert. Leer lassen = Demo-Daten.</p>
   <label>Kalender-Proxy (nötig für iCloud/Google)</label><input id="cProxy" placeholder="https://jarvis-kalender.DEINNAME.workers.dev/?url=">
-  <label>Stimme</label><div class="row"><select id="cVoice"></select><button type="button" id="cVoiceTest">TEST</button></div>
+  <label>Stimme <span id="cVoiceInfo"></span></label><div class="row"><select id="cVoice"></select><button type="button" id="cVoiceTest">TEST</button></div>
   <label>Tonhöhe <span id="cPitchV"></span></label><input id="cPitch" type="range" min="0.5" max="1.5" step="0.05">
   <label>Tempo <span id="cRateV"></span></label><input id="cRate" type="range" min="0.6" max="1.5" step="0.05">
   <p>★ = natürliche (neuronale) Stimme, klingt am flüssigsten. Am besten in Microsoft Edge: „Conrad Online (Natural)“ oder „Florian Online (Natural)“. iPhone: Einstellungen › Bedienungshilfen › Gesprochene Inhalte › Stimmen › Deutsch › eine „Premium“- oder „Erweitert“-Stimme laden. Chrome: „Google Deutsch“. Tonhöhe und Tempo bei 1 klingen am natürlichsten.</p>
@@ -526,15 +526,17 @@ $("mic").onclick=()=> listening?stopRec():startRec();
 /* ---------------- Bedienung ---------------- */
 function toggleFS(){ document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen().catch(()=>{}); }
 $("fsBtn").onclick=toggleFS;
-addEventListener("keydown",e=>{ if(e.target.tagName==="INPUT") return;
+addEventListener("keydown",e=>{ if(/INPUT|SELECT|TEXTAREA|BUTTON/.test(e.target.tagName) || $("cfg").open) return;
   if(e.key==="f"||e.key==="F") toggleFS();
   if(e.code==="Space"){ e.preventDefault(); $("mic").click(); } });
 const fields={cCity:"city",cName:"name",cIcs:"icsUrl",cIgId:"igUserId",cIgTok:"igToken",cProxy:"corsProxy"};
 function fillVoices(){
   const sel=$("cVoice"); if(!sel || !("speechSynthesis" in window)) return;
   const nat=v=>/natural|online|premium|enhanced|neural/i.test(v.name);
-  const all=speechSynthesis.getVoices().slice().sort((a,b)=>(b.lang.startsWith("de")-a.lang.startsWith("de"))||(nat(b)-nat(a))||(b.lang.startsWith("en")-a.lang.startsWith("en"))||a.name.localeCompare(b.name));
+  const all=speechSynthesis.getVoices().filter(v=>/^(de|en)/i.test(v.lang)).sort((a,b)=>(b.lang.startsWith("de")-a.lang.startsWith("de"))||(nat(b)-nat(a))||(b.lang.startsWith("en")-a.lang.startsWith("en"))||a.name.localeCompare(b.name));
   const cur=sel.value||CFG.voiceName||"";
+  const key=all.map(v=>v.name).join("|"); if(sel.dataset.key===key && sel.options.length>1) return; sel.dataset.key=key;
+  $("cVoiceInfo").textContent = all.length ? `${all.length} deutsche und englische Stimmen gefunden.` : "Noch keine Stimmen gefunden. Bitte kurz warten oder TEST drücken.";
   sel.innerHTML='<option value="">Automatisch (deutsche Männerstimme)</option>'+all.map(v=>`<option value="${v.name.replace(/"/g,"&quot;")}">${nat(v)?"★ ":""}${v.name} (${v.lang})</option>`).join("");
   sel.value=all.some(v=>v.name===cur)?cur:"";
 }
@@ -542,7 +544,7 @@ if("speechSynthesis" in window) speechSynthesis.addEventListener?.("voiceschange
 const showSl=()=>{ $("cPitchV").textContent=(+$("cPitch").value).toFixed(2); $("cRateV").textContent=(+$("cRate").value).toFixed(2); };
 $("cPitch").oninput=showSl; $("cRate").oninput=showSl;
 $("cVoiceTest").onclick=()=>speak(`Guten Tag, ${$("cName").value.trim()||CFG.name}. Alle Systeme sind einsatzbereit.`,{voiceName:$("cVoice").value,pitch:$("cPitch").value,rate:$("cRate").value});
-$("cfgBtn").onclick=()=>{ for(const [id,k] of Object.entries(fields)) $(id).value=CFG[k]||""; fillVoices(); $("cVoice").value=CFG.voiceName||""; $("cPitch").value=CFG.pitch; $("cRate").value=CFG.rate; showSl(); $("cfg").showModal(); };
+$("cfgBtn").onclick=()=>{ for(const [id,k] of Object.entries(fields)) $(id).value=CFG[k]||""; fillVoices(); $("cVoice").value=CFG.voiceName||""; let tries=0; const iv=setInterval(()=>{ fillVoices(); if(++tries>10||$("cVoice").options.length>1) clearInterval(iv); },300); $("cPitch").value=CFG.pitch; $("cRate").value=CFG.rate; showSl(); $("cfg").showModal(); };
 $("cCancel").onclick=()=>$("cfg").close();
 $("cSave").onclick=()=>{ for(const [id,k] of Object.entries(fields)) CFG[k]=$(id).value.trim()||DEFAULTS[k];
   CFG.voiceName=$("cVoice").value; CFG.pitch=+$("cPitch").value; CFG.rate=+$("cRate").value;
