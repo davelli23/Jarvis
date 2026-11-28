@@ -258,7 +258,7 @@ dialog button.primary{background:var(--cyan);color:var(--bg)}
   <label>Stimme <span id="cVoiceInfo"></span></label><div class="row"><select id="cVoice"></select><button type="button" id="cVoiceTest">TEST</button></div>
   <label>Tonhöhe <span id="cPitchV"></span></label><input id="cPitch" type="range" min="0.5" max="1.5" step="0.05">
   <label>Tempo <span id="cRateV"></span></label><input id="cRate" type="range" min="0.6" max="1.5" step="0.05">
-  <p>★ = natürliche (neuronale) Stimme, klingt am flüssigsten. Am besten in Microsoft Edge: „Conrad Online (Natural)“ oder „Florian Online (Natural)“. iPhone: Einstellungen › Bedienungshilfen › Gesprochene Inhalte › Stimmen › Deutsch › eine „Premium“- oder „Erweitert“-Stimme laden. Chrome: „Google Deutsch“. Tonhöhe und Tempo bei 1 klingen am natürlichsten.</p>
+  <p>★ = natürliche (neuronale) Stimme, klingt am flüssigsten. Am besten in Microsoft Edge: „Conrad Online (Natural)“ oder „Florian Online (Natural)“. iPhone: Einstellungen › Bedienungshilfen › Gesprochene Inhalte › Stimmen › Deutsch › eine „Premium“- oder „Erweitert“-Stimme laden. Chrome: „Google Deutsch“. Tonhöhe und Tempo bei 1 klingen am natürlichsten. „JARVIS-Stil“ nutzt eine britische Stimme (Edge: „Ryan Online (Natural)“, Chrome: „Google UK English Male“, Mac: „Daniel“) und spricht Deutsch daher mit englischem Akzent.</p>
   <div class="btns"><button id="cCancel">ABBRECHEN</button><button class="primary" id="cSave">SPEICHERN</button></div>
 </dialog>
 
@@ -461,6 +461,12 @@ const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
 let rec=null, listening=false, awaitingCmd=false, awaitTimer=null;
 function pickVoice(name){
   const all=speechSynthesis.getVoices();
+  if(name==="__jarvis"){ // JARVIS-Stil: ruhige britische Männerstimme
+    const gb=all.filter(v=>/^en[-_]GB/i.test(v.lang));
+    for(const re of [/ryan.*natural/i,/thomas.*natural/i,/natural.*(ryan|thomas|alfie|elliot|ethan|oliver|noah)/i,/google uk english male/i,/daniel/i,/arthur/i,/oliver/i,/(ryan|thomas|george|male)/i])
+      { const m=gb.find(v=>re.test(v.name)); if(m) return m; }
+    return gb[0]||null;
+  }
   if(name){ const m=all.find(v=>v.name===name); if(m) return m; }
   const de=all.filter(v=>v.lang.startsWith("de"));
   const male=/conrad|florian|killian|markus|yannick|stefan|male|mann/i, natural=/natural|online|premium|enhanced|neural/i;
@@ -537,11 +543,12 @@ function fillVoices(){
   const cur=sel.value||CFG.voiceName||"";
   const key=all.map(v=>v.name).join("|"); if(sel.dataset.key===key && sel.options.length>1) return; sel.dataset.key=key;
   $("cVoiceInfo").textContent = all.length ? `${all.length} deutsche und englische Stimmen gefunden.` : "Noch keine Stimmen gefunden. Bitte kurz warten oder TEST drücken.";
-  sel.innerHTML='<option value="">Automatisch (deutsche Männerstimme)</option>'+all.map(v=>`<option value="${v.name.replace(/"/g,"&quot;")}">${nat(v)?"★ ":""}${v.name} (${v.lang})</option>`).join("");
-  sel.value=all.some(v=>v.name===cur)?cur:"";
+  sel.innerHTML='<option value="">Automatisch (deutsche Männerstimme)</option><option value="__jarvis">★ JARVIS-Stil (britische Männerstimme)</option>'+all.map(v=>`<option value="${v.name.replace(/"/g,"&quot;")}">${nat(v)?"★ ":""}${v.name} (${v.lang})</option>`).join("");
+  sel.value=(cur==="__jarvis"||all.some(v=>v.name===cur))?cur:"";
 }
 if("speechSynthesis" in window) speechSynthesis.addEventListener?.("voiceschanged",fillVoices);
 const showSl=()=>{ $("cPitchV").textContent=(+$("cPitch").value).toFixed(2); $("cRateV").textContent=(+$("cRate").value).toFixed(2); };
+$("cVoice").onchange=()=>{ if($("cVoice").value==="__jarvis"){ $("cPitch").value=0.95; $("cRate").value=0.95; showSl(); } };
 $("cPitch").oninput=showSl; $("cRate").oninput=showSl;
 $("cVoiceTest").onclick=()=>speak(`Guten Tag, ${$("cName").value.trim()||CFG.name}. Alle Systeme sind einsatzbereit.`,{voiceName:$("cVoice").value,pitch:$("cPitch").value,rate:$("cRate").value});
 $("cfgBtn").onclick=()=>{ for(const [id,k] of Object.entries(fields)) $(id).value=CFG[k]||""; fillVoices(); $("cVoice").value=CFG.voiceName||""; let tries=0; const iv=setInterval(()=>{ fillVoices(); if(++tries>10||$("cVoice").options.length>1) clearInterval(iv); },300); $("cPitch").value=CFG.pitch; $("cRate").value=CFG.rate; showSl(); $("cfg").showModal(); };
